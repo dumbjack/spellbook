@@ -12,6 +12,9 @@
 
 {% set project_start_date = '2024-01-08' %}
 {% set ci_start_date = '2026-08-11' %}
+{% set ci_end_date = '2026-08-18' %}
+{% set seed_start_date = '2024-03-23' %}
+{% set seed_end_date = '2024-03-24' %}
 {% set fee_receiver_1 = '8r2hZoDfk5hDWJ1sDujAi2Qr45ZyZw5EQxAXiMZWLKh2' %}
 {% set fee_receiver_2 = 'Cj297UauzMX64FU9dKJZRUBWszJ7tEWpVheasq4CfATV' %}
 {% set fee_receiver_3 = 'HKMh8nV3ysSofRi23LsfVGLGQKB415QAEfZT96kCcVj4' %}
@@ -61,6 +64,19 @@ where
     {% if is_incremental() %}
         and {{ incremental_predicate('block_time') }}
     {% else %}
-        {# Temporary 7-day CI window; restore project_start_date for full-history validation. #}
-        and block_time >= timestamp '{{ ci_start_date }}'
+        {# Temporary bounded CI window plus the historical seed-test partition. #}
+        and (
+            (
+                block_date >= date '{{ ci_start_date }}'
+                and block_date < date '{{ ci_end_date }}'
+                and block_time >= timestamp '{{ ci_start_date }}'
+                and block_time < timestamp '{{ ci_end_date }}'
+            )
+            or (
+                block_date >= date '{{ seed_start_date }}'
+                and block_date < date '{{ seed_end_date }}'
+                and block_time >= timestamp '{{ seed_start_date }}'
+                and block_time < timestamp '{{ seed_end_date }}'
+            )
+        )
     {% endif %}

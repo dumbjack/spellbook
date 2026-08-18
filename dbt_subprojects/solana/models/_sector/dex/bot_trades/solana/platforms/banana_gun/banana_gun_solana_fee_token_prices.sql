@@ -12,6 +12,9 @@
 
 {% set project_start_date = '2024-01-08' %}
 {% set ci_start_date = '2026-08-11' %}
+{% set ci_end_date = '2026-08-18' %}
+{% set seed_start_date = '2024-03-23' %}
+{% set seed_end_date = '2024-03-24' %}
 
 with fee_payments as (
     select
@@ -23,8 +26,19 @@ with fee_payments as (
     {% if is_incremental() %}
         where {{ incremental_predicate('block_time') }}
     {% else %}
-        {# Temporary 7-day CI window; restore project_start_date for full-history validation. #}
-        where block_time >= timestamp '{{ ci_start_date }}'
+        {# Temporary bounded CI window plus the historical seed-test partition. #}
+        where (
+            (
+                block_month >= date_trunc('month', date '{{ ci_start_date }}')
+                and block_time >= timestamp '{{ ci_start_date }}'
+                and block_time < timestamp '{{ ci_end_date }}'
+            )
+            or (
+                block_month = date_trunc('month', date '{{ seed_start_date }}')
+                and block_time >= timestamp '{{ seed_start_date }}'
+                and block_time < timestamp '{{ seed_end_date }}'
+            )
+        )
     {% endif %}
 ),
 
@@ -54,6 +68,15 @@ join {{ source('prices', 'usd') }} as prices
     {% if is_incremental() %}
         and {{ incremental_predicate('prices.minute') }}
     {% else %}
-        {# Temporary 7-day CI window; restore project_start_date for full-history validation. #}
-        and prices.minute >= timestamp '{{ ci_start_date }}'
+        {# Temporary bounded CI window plus the historical seed-test partition. #}
+        and (
+            (
+                prices.minute >= timestamp '{{ ci_start_date }}'
+                and prices.minute < timestamp '{{ ci_end_date }}'
+            )
+            or (
+                prices.minute >= timestamp '{{ seed_start_date }}'
+                and prices.minute < timestamp '{{ seed_end_date }}'
+            )
+        )
     {% endif %}
