@@ -30,69 +30,71 @@
 {% set fee_receiver_6 = '47hEzz83VFR23rLTEeVm9A7eFzjJwjvdupPPmX3cePqF' %}
 {% set fee_receiver_7 = 'EMbqD9Y9jLXEa3RbCR8AsEW1kVa3EiJgDLVgvKh4qNFP' %}
 {% set fee_receiver_8 = 'Lk693UiTzQC4vobasRS1QGcYA9D6RGYLjHp1bWreQtM' %}
-{% set wsol_token = 'So11111111111111111111111111111111111111112' %}
 
 with bot_trades as (
     select
-        trades.block_time,
-        cast(date_trunc('day', trades.block_time) as date) as block_date,
-        cast(date_trunc('month', trades.block_time) as date) as block_month,
-        'solana' as blockchain,
-        trades.amount_usd,
-        if(
-            trades.token_sold_mint_address = '{{ wsol_token }}',
-            'Buy',
-            'Sell'
-        ) as type,
-        trades.token_bought_amount,
-        trades.token_bought_symbol,
-        trades.token_bought_mint_address as token_bought_address,
-        trades.token_sold_amount,
-        trades.token_sold_symbol,
-        trades.token_sold_mint_address as token_sold_address,
-        fee_payments.amount_usd as fee_usd,
-        fee_payments.amount as fee_token_amount,
-        'SOL' as fee_token_symbol,
-        '{{ wsol_token }}' as fee_token_address,
-        trades.project,
-        trades.version,
-        trades.token_pair,
-        trades.project_program_id as project_contract_address,
-        trades.trader_id as user,
-        trades.tx_id,
-        trades.tx_index,
-        trades.outer_instruction_index,
-        trades.inner_instruction_index
-    from {{ source('dex_solana', 'trades') }} as trades
-    join {{ ref('banana_gun_solana_fee_payments_usd') }} as fee_payments
-        on trades.tx_id = fee_payments.tx_id
-        and trades.block_time = fee_payments.block_time
-        and trades.block_month = fee_payments.block_month
+        matched_trades.block_time,
+        matched_trades.block_date,
+        matched_trades.block_month,
+        matched_trades.blockchain,
+        matched_trades.amount_usd,
+        matched_trades.type,
+        matched_trades.token_bought_amount,
+        matched_trades.token_bought_symbol,
+        matched_trades.token_bought_address,
+        matched_trades.token_sold_amount,
+        matched_trades.token_sold_symbol,
+        matched_trades.token_sold_address,
+        matched_trades.fee_usd,
+        matched_trades.fee_token_amount,
+        matched_trades.fee_token_symbol,
+        matched_trades.fee_token_address,
+        matched_trades.project,
+        matched_trades.version,
+        matched_trades.token_pair,
+        matched_trades.project_contract_address,
+        matched_trades.user,
+        matched_trades.tx_id,
+        matched_trades.tx_index,
+        matched_trades.outer_instruction_index,
+        matched_trades.inner_instruction_index
+    from {{ source('solana', 'transactions') }} as transactions
+    join {{ ref('banana_gun_solana_matched_trades') }} as matched_trades
+        on transactions.id = matched_trades.tx_id
+        and transactions.block_time = matched_trades.block_time
+        and transactions.block_date = matched_trades.block_date
         {% if is_incremental() %}
-            and {{ incremental_predicate('fee_payments.block_time') }}
+            and {{ incremental_predicate('matched_trades.block_time') }}
         {% else %}
             {# Temporary bounded CI window plus the historical seed-test partition. #}
             and (
                 (
-                    fee_payments.block_month >= date_trunc(
+                    matched_trades.block_month >= date_trunc(
                         'month', date '{{ ci_start_date }}'
                     )
-                    and fee_payments.block_time >= timestamp '{{ ci_start_date }}'
-                    and fee_payments.block_time < timestamp '{{ ci_end_date }}'
+                    and matched_trades.block_time >= timestamp '{{ ci_start_date }}'
+                    and matched_trades.block_time < timestamp '{{ ci_end_date }}'
                 )
                 or (
-                    fee_payments.block_month = date_trunc(
+                    matched_trades.block_month = date_trunc(
                         'month', date '{{ seed_start_date }}'
                     )
-                    and fee_payments.block_time >= timestamp '{{ seed_start_date }}'
-                    and fee_payments.block_time < timestamp '{{ seed_end_date }}'
+                    and matched_trades.block_time >= timestamp '{{ seed_start_date }}'
+                    and matched_trades.block_time < timestamp '{{ seed_end_date }}'
                 )
             )
         {% endif %}
-    join {{ source('solana', 'transactions') }} as transactions
-        on trades.tx_id = transactions.id
-        and trades.block_time = transactions.block_time
-        and trades.block_date = transactions.block_date
+    where
+        transactions.signer not in (
+            '{{ fee_receiver_1 }}',
+            '{{ fee_receiver_2 }}',
+            '{{ fee_receiver_3 }}',
+            '{{ fee_receiver_4 }}',
+            '{{ fee_receiver_5 }}',
+            '{{ fee_receiver_6 }}',
+            '{{ fee_receiver_7 }}',
+            '{{ fee_receiver_8 }}'
+        )
         {% if is_incremental() %}
             and {{ incremental_predicate('transactions.block_time') }}
         {% else %}
@@ -109,52 +111,6 @@ with bot_trades as (
                     and transactions.block_date < date '{{ seed_end_date }}'
                     and transactions.block_time >= timestamp '{{ seed_start_date }}'
                     and transactions.block_time < timestamp '{{ seed_end_date }}'
-                )
-            )
-        {% endif %}
-    where
-        trades.trader_id not in (
-            '{{ fee_receiver_1 }}',
-            '{{ fee_receiver_2 }}',
-            '{{ fee_receiver_3 }}',
-            '{{ fee_receiver_4 }}',
-            '{{ fee_receiver_5 }}',
-            '{{ fee_receiver_6 }}',
-            '{{ fee_receiver_7 }}',
-            '{{ fee_receiver_8 }}'
-        )
-        and transactions.signer not in (
-            '{{ fee_receiver_1 }}',
-            '{{ fee_receiver_2 }}',
-            '{{ fee_receiver_3 }}',
-            '{{ fee_receiver_4 }}',
-            '{{ fee_receiver_5 }}',
-            '{{ fee_receiver_6 }}',
-            '{{ fee_receiver_7 }}',
-            '{{ fee_receiver_8 }}'
-        )
-        {% if is_incremental() %}
-            and {{ incremental_predicate('trades.block_time') }}
-        {% else %}
-            {# Temporary bounded CI window plus the historical seed-test partition. #}
-            and (
-                (
-                    trades.block_month >= date_trunc(
-                        'month', date '{{ ci_start_date }}'
-                    )
-                    and trades.block_date >= date '{{ ci_start_date }}'
-                    and trades.block_date < date '{{ ci_end_date }}'
-                    and trades.block_time >= timestamp '{{ ci_start_date }}'
-                    and trades.block_time < timestamp '{{ ci_end_date }}'
-                )
-                or (
-                    trades.block_month = date_trunc(
-                        'month', date '{{ seed_start_date }}'
-                    )
-                    and trades.block_date >= date '{{ seed_start_date }}'
-                    and trades.block_date < date '{{ seed_end_date }}'
-                    and trades.block_time >= timestamp '{{ seed_start_date }}'
-                    and trades.block_time < timestamp '{{ seed_end_date }}'
                 )
             )
         {% endif %}

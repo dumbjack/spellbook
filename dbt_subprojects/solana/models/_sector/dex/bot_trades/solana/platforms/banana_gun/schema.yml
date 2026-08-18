@@ -114,6 +114,52 @@ models:
         data_tests:
           - not_null
 
+  - name: banana_gun_solana_matched_trades
+    description: "Candidate Banana Gun trades matched to fee payments before signer attribution"
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - block_month
+              - blockchain
+              - tx_id
+              - tx_index
+              - outer_instruction_index
+              - inner_instruction_index_key
+    columns:
+      - name: block_time
+        description: "UTC timestamp of the matched Solana trade"
+        data_tests:
+          - not_null
+      - name: block_date
+        description: "UTC date of the matched Solana trade"
+        data_tests:
+          - not_null
+      - name: block_month
+        description: "UTC month used to partition matched trades"
+        data_tests:
+          - not_null
+      - name: blockchain
+        description: "Blockchain name"
+        data_tests:
+          - not_null
+      - name: tx_id
+        description: "Solana transaction signature"
+        data_tests:
+          - not_null
+      - name: tx_index
+        description: "Transaction index within the block"
+        data_tests:
+          - not_null
+      - name: outer_instruction_index
+        description: "Outer instruction index of the trade"
+        data_tests:
+          - not_null
+      - name: inner_instruction_index_key
+        description: "Non-null normalized inner instruction index used by the merge key"
+        data_tests:
+          - not_null
+
   - name: banana_gun_solana_bot_trades
     meta:
       blockchain: solana
